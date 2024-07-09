@@ -1,0 +1,8 @@
+
+matplotlib
+pandas
+numpy
+scikit-learn
+inventorize
+statsmodels
+xlsx 
