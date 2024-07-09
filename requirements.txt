@@ -6,4 +6,4 @@ numpy==1.21.4
 scikit-learn==1.0.1
 inventorize==0.1.7
 statsmodels==0.13.1
-xlsx==3.0.3
+xlsxwriter==3.0.3
