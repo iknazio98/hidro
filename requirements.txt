@@ -7,3 +7,4 @@ scikit-learn
 inventorize
 statsmodels
 xlsxwriter
+openpyxl
