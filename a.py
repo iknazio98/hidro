@@ -162,7 +162,7 @@ def mostrar_grafico():
     from io import BytesIO
 
     st.sidebar.header("Cargar archivo de ventas")
-    uploaded_file = st.sidebar.file_uploader("Sube tu archivo CSV de ventas", type=["csv"])
+    uploaded_file = st.sidebar.file_uploader("Sube tu archivo Excel de ventas", type=["xlsx"])
 
     # Carga del archivo de lead time
     st.sidebar.header("Cargar archivo de lead time")
@@ -170,39 +170,28 @@ def mostrar_grafico():
     
     if uploaded_file is not None and uploaded_file_ldtime is not None:
         # Lectura de los archivos subidos
-        dataset = pd.read_csv(uploaded_file, index_col=0, encoding='latin-1')
-        ldtime = pd.read_excel(uploaded_file_ldtime)
+        df = pd.read_excel(uploaded_file)
+        xd = pd.read_excel(uploaded_file_ldtime)
+        # Convertir la columna 'Fe.Pedido' a tipo datetime, si no lo está
+        xd['Fe.Pedido'] = pd.to_datetime(xd['Fe.Pedido'])
 
+        # Ordenar el DataFrame por 'Material' y 'Fe.Pedido'
+        xd = xd.sort_values(by=['Material', 'Fe.Pedido'])
+
+        # Obtener el último ciclo para cada material
+        last_cycles = xd.groupby('Material').last()['Ciclo']
+
+        # Convertir el resultado a un diccionario
+        lead_time = last_cycles.to_dict()
         # Procesamiento de datos
-        df = dataset.drop(columns=[
-            'Organización de ventas', 'Pagador', 'Nombre', 'Rut', 'Gr.Clt-CLI',
-            'Gr.clientes-CLI', 'Gr.Ven.-CLI', 'Gr. Vendedores - CLI',
-            'Gr.Precio-CLI', 'Nº pedido cliente', 'Fe.PedCli', 'Factura',
-            'Referencia', 'Clase de factura', 'ZonaVen',
-            'Zona de ventas', 'GI', 'Grupo de imputación', 'CPag', 'FeValFijad',
-            'Referencia de pago', 'StatusC', 'An.', 'Pos.Fac',
-            '% margen s/venta', '% margen s/cost', 'Subtotal 6', 'Mon..5', 'Gr.Cl1',
-            'Gr.Clientes 1', 'Grupo art', 'Grupo de artículos', 'GrMat',
-            'Grupo materiales', 'GImMat', 'Gr.Imp.Material', 'OfVta',
-            'Oficina de ventas', 'Doc.venta', 'Tp.DC', 'Pos.Ventas', 'Gr.Ven.-PED',
-            'Gr.vendedores-PED', 'Gr.Cl-PED', 'Gr.clientes-PED', 'GP-PED',
-            'Gr.Precio-PED', 'Costes internos posición', 'Mon..6', 'Proc.empres.',
-            'CeBe'
-        ])
+        
         df['Fecha factura'] = pd.to_datetime(df['Fecha factura'])
         df.rename(columns={'Fecha factura': 'fecha'}, inplace=True)
         df['Año'] = df.fecha.dt.year
-        df = df[df['fecha'] >= '2022-01-1']
-        df.rename(columns={'Denominación': 'Denominacion', 'Ctd.facturada2': 'Unidad'}, inplace=True)
+        df.rename(columns={'Denominación': 'Denominacion', 'Ctd.facturada.1': 'Unidad', 'Ctd.facturada': 'Cantidad'}, inplace=True)
         df = df[~df['Denominacion'].str.contains('POLIMERO|CLORURO|SULFATO|FLETE|UREA|REACTIVO')]
-        df['Cantidad'] = df['Cantidad'].str.replace(",", "").str.replace(".", "")
-        df['NETO'] = df['NETO'].str.replace(",", "").str.replace(".", "")
-        df['Margen'] = df['Margen'].str.replace(",", "").str.replace(".", "")
         df = df[df['Cantidad'].notna()]
-        df['Material'] = df['Material'].astype(str)
-        df['Cantidad'] = df['Cantidad'].astype(int)
-        df['NETO'] = df['NETO'].astype(int)
-        df['Margen'] = df['Margen'].astype(int)
+        df['Material'] = df['Material'].astype(str) 
         df = df[~df['Material'].str.startswith('S', na=False)]
         df['Familia'] = df['Denominacion'].str.split().str[0]
         df['date'] = df.fecha.dt.strftime('%Y-%m-%d')
@@ -211,7 +200,7 @@ def mostrar_grafico():
         
         # Aplicar filtro de fecha
         
-        ventas_group = abc.groupby('Denominacion').agg(codigo_material=('Material', np.unique), cantidad_total= ('Cantidad',np.sum),unidad_medida=('UM', np.unique),ventas_totales= ('NETO',np.sum), margen_total =('Margen', np.sum),familia=('Familia', np.unique)).reset_index()
+        ventas_group = abc.groupby('Denominacion').agg(codigo_material=('Material', np.unique), cantidad_total= ('Cantidad',np.sum),unidad_medida=('Unidad', np.unique),ventas_totales= ('NETO',np.sum), margen_total =('Margen', np.sum),familia=('Familia', np.unique)).reset_index()
         ventas_group.familia=ventas_group.familia.astype(str)
         ventas_group.unidad_medida=ventas_group.unidad_medida.astype(str)
         ventas_group.codigo_material=ventas_group.codigo_material.astype(str)
@@ -240,20 +229,14 @@ def mostrar_grafico():
         mapping = {'A_A': 0.95, "A_C": 0.95, "C_A": 0.8, "A_B": 0.95, 'B_A': 0.7, "B_C": 0.75, "C_C": 0.7, "B_B": 0.7, "C_B": 0.8}
         for_abc['service_level'] = for_abc.product_mix.map(mapping)
 
-        ldtime = ldtime[ldtime['Material'].notna()]
-        ldtime.Demora_avg = ldtime.Demora_avg.round()
-        ldtime.LDtime_avg = ldtime.LDtime_avg.round()
-        dic_prom = ldtime.set_index('Material')['Demora_avg'].to_dict()
-        dic_st = ldtime.set_index('Material')['LDtime_avg'].to_dict()
+        
 
         abcd = for_abc[['skus', 'service_level']]
         for_reorder = pd.merge(groupedd, abcd, how='left', left_on='Material', right_on='skus')
         for_reorder.Material = for_reorder.Material.astype(str)
-        for_reorder['leadtime_prom'] = for_reorder.Material.map(dic_prom)
-        for_reorder['leadtime_sd'] = for_reorder.Material.map(dic_st)
-        for_reorder['leadtime_prom'] = for_reorder['leadtime_prom'].fillna(for_reorder['leadtime_prom'].mean())
-        for_reorder['leadtime_sd'] = for_reorder['leadtime_sd'].fillna(for_reorder['leadtime_sd'].mean())
-
+        for_reorder['leadtime_prom'] = for_reorder.Material.map(lead_time)
+        
+        for_reorder['leadtime_prom'] = for_reorder['leadtime_prom'].fillna(30)
         empty_data = pd.DataFrame()
         for i in range(for_reorder.shape[0]):
             ordering_point = inv.reorderpoint(for_reorder.loc[i, 'promedio'], for_reorder.loc[i, 'sd'], for_reorder.loc[i, 'leadtime_prom'], for_reorder.loc[i, 'service_level'])
@@ -264,7 +247,7 @@ def mostrar_grafico():
         all_data = pd.merge(for_reorder, empty_data, how='left')
         all_data['saftey_stock'] = all_data['reorder_point'] - all_data['demandleadtime']
         all_data = all_data[all_data.saftey_stock != max(all_data.saftey_stock)]
-        all_data = all_data.drop(columns=['skus', 'leadtime_sd', 'demandleadtime', 'sigmadl', 'sd', 'promedio'])
+        all_data = all_data.drop(columns=['skus', 'demandleadtime', 'sigmadl', 'sd', 'promedio'])
         
         # Añadir la denominación a all_data
         all_data = pd.merge(all_data, df[['Material', 'Denominacion']].drop_duplicates(), on='Material', how='left')
@@ -285,8 +268,8 @@ def mostrar_grafico():
 
         # Reordenar las columnas del DataFrame
         all_data = all_data[nuevo_orden] 
-        all_data['reorder_point'] = all_data['reorder_point'].round()
-        all_data['saftey_stock'] = all_data['saftey_stock'].round()  
+        all_data['reorder_point'] = (all_data['reorder_point']/7).round()
+        all_data['saftey_stock'] = (all_data['saftey_stock']/7).round()  
         st.table(for_abc.head(5))
         
         
