@@ -328,9 +328,11 @@ def mostrar_dataframe():
     import inventorize as inv
     import io
     from io import BytesIO
+    import matplotlib.pyplot as plt
+    import seaborn as sns
 
     st.sidebar.header("Cargar archivo de ventas")
-    uploaded_file = st.sidebar.file_uploader("Sube tu archivo CSV de ventas", type=["csv"])
+    uploaded_file = st.sidebar.file_uploader("Sube tu archivo Excel de ventas", type=["xlsx"])
     # Lista de Familias
     um = [
         "M", "UN"
@@ -340,43 +342,23 @@ def mostrar_dataframe():
     um1 = st.sidebar.selectbox("Selecciona la unidad de medida", um)
     if uploaded_file is not None:
         # Lectura de los archivos subidos
-        dataset = pd.read_csv(uploaded_file, index_col=0, encoding='latin-1')
+        df = pd.read_excel(uploaded_file)
        
         # Procesamiento de datos
-        df = dataset.drop(columns=[
-            'Organización de ventas', 'Pagador', 'Nombre', 'Rut', 'Gr.Clt-CLI',
-            'Gr.clientes-CLI', 'Gr.Ven.-CLI', 'Gr. Vendedores - CLI',
-            'Gr.Precio-CLI', 'Nº pedido cliente', 'Fe.PedCli', 'Factura',
-            'Referencia', 'Clase de factura', 'ZonaVen',
-            'Zona de ventas', 'GI', 'Grupo de imputación', 'CPag', 'FeValFijad',
-            'Referencia de pago', 'StatusC', 'An.', 'Pos.Fac',
-            '% margen s/venta', '% margen s/cost', 'Subtotal 6', 'Mon..5', 'Gr.Cl1',
-            'Gr.Clientes 1', 'Grupo art', 'Grupo de artículos', 'GrMat',
-            'Grupo materiales', 'GImMat', 'Gr.Imp.Material', 'OfVta',
-            'Oficina de ventas', 'Doc.venta', 'Tp.DC', 'Pos.Ventas', 'Gr.Ven.-PED',
-            'Gr.vendedores-PED', 'Gr.Cl-PED', 'Gr.clientes-PED', 'GP-PED',
-            'Gr.Precio-PED', 'Costes internos posición', 'Mon..6', 'Proc.empres.',
-            'CeBe'
-        ])
         df['Fecha factura'] = pd.to_datetime(df['Fecha factura'])
         df.rename(columns={'Fecha factura': 'fecha'}, inplace=True)
         df['Año'] = df.fecha.dt.year
-        df = df[df['fecha'] >= '2022-01-1']
-        df.rename(columns={'Denominación': 'Denominacion', 'Ctd.facturada2': 'Unidad'}, inplace=True)
+        df.rename(columns={'Denominación': 'Denominacion', 'Ctd.facturada.1': 'Unidad', 'Ctd.facturada': 'Cantidad'}, inplace=True)
         df = df[~df['Denominacion'].str.contains('POLIMERO|CLORURO|SULFATO|FLETE|UREA|REACTIVO')]
-        df['Cantidad'] = df['Cantidad'].str.replace(",", "").str.replace(".", "")
-        df['NETO'] = df['NETO'].str.replace(",", "").str.replace(".", "")
-        df['Margen'] = df['Margen'].str.replace(",", "").str.replace(".", "")
+        
         df = df[df['Cantidad'].notna()]
         df['Material'] = df['Material'].astype(str)
-        df['Cantidad'] = df['Cantidad'].astype(int)
-        df['NETO'] = df['NETO'].astype(int)
-        df['Margen'] = df['Margen'].astype(int)
+      
         df = df[~df['Material'].str.startswith('S', na=False)]
         df['Familia'] = df['Denominacion'].str.split().str[0]
         df['date'] = df.fecha.dt.strftime('%Y-%m-%d')
         df['date'] = pd.to_datetime(df['date'])
-        df = df[df['UM'] == um1]
+        df = df[df['Unidad'] == um1]
         abc=df
         st.sidebar.header("Filtro de Fecha para ABC")
         start_date = st.sidebar.date_input("Fecha de inicio", value=abc['date'].min())
@@ -384,52 +366,56 @@ def mostrar_dataframe():
         
         # Aplicar filtro de fecha
         abc_filtered = abc[(abc['date'] >= pd.to_datetime(start_date)) & (abc['date'] <= pd.to_datetime(end_date))]
-        ventas_group = abc_filtered.groupby('Denominacion').agg(codigo_material=('Material', np.unique), cantidad_total= ('Cantidad',np.sum),unidad_medida=('UM', np.unique),ventas_totales= ('NETO',np.sum), margen_total =('Margen', np.sum),familia=('Familia', np.unique)).reset_index()
+        ventas_group = abc_filtered.groupby('Denominacion').agg(codigo_material=('Material', np.unique), cantidad_total= ('Cantidad',np.sum),unidad_medida=('Unidad', np.unique),ventas_totales= ('NETO',np.sum), margen_total =('Margen', np.sum),familia=('Familia', np.unique)).reset_index()
         ventas_group.familia=ventas_group.familia.astype(str)
         ventas_group.unidad_medida=ventas_group.unidad_medida.astype(str)
         ventas_group.codigo_material=ventas_group.codigo_material.astype(str)
         b=inv.productmix(ventas_group['Denominacion'], ventas_group['ventas_totales'],ventas_group['margen_total'])
-        b.head(20)
-        df_group = df.groupby(['Denominacion', 'fecha']).agg(ventas_totales=('NETO', 'sum')).reset_index()
-
-        cv_data = df_group.groupby('Denominacion').agg(promedio_ventas=('ventas_totales', 'mean'), sd_ventas=('ventas_totales', 'std')).reset_index()
-        cv_data['cv_squared'] = (cv_data['sd_ventas'] / cv_data['promedio_ventas']) ** 2
-
-        producto_date = df_group.groupby('Denominacion').agg(cantidad=('Denominacion', 'count')).reset_index()
-        skus = producto_date.Denominacion.unique()
-        fecha = max(df.date)
-        nuevafecha = fecha - datetime.timedelta(days=30 * 4)
-        last_four = df[df.fecha > nuevafecha]
-        last_four['month'] = last_four.date.dt.month
-        last_four['year'] = last_four.date.dt.year
-        last_four['week'] = last_four.date.dt.isocalendar().week
-
-        aa = last_four.groupby(['week', 'month', 'year', 'Material']).agg(
-            nom_material=('Denominacion', np.unique), date=('date', 'first'), total_semanal=('Cantidad', np.sum), total_ventas=('NETO', np.sum)).reset_index()
-
-        groupedd = aa.groupby('Material').agg(promedio=('total_semanal', np.mean), sd=('total_semanal', 'std'), total_demanda=('total_semanal', np.sum), total_ventas=('total_ventas', np.sum)).reset_index()
-        for_abc = inv.productmix(groupedd['Material'], groupedd['total_demanda'], groupedd['total_ventas'])
+        for_abc = inv.productmix(ventas_group['Denominacion'], ventas_group['cantidad_total'], ventas_group['ventas_totales'])
 
         mapping = {'A_A': 0.95, "A_C": 0.95, "C_A": 0.8, "A_B": 0.95, 'B_A': 0.7, "B_C": 0.75, "C_C": 0.7, "B_B": 0.7, "C_B": 0.8}
         for_abc['service_level'] = for_abc.product_mix.map(mapping)
+        b['service_level'] = b.product_mix.map(mapping)
 
-        abcd = for_abc[['skus', 'service_level']]
         
 
-        # Añadir la denominación a for_abc
-        for_abc = pd.merge(for_abc, df[['Material', 'Denominacion']].drop_duplicates(), left_on='skus', right_on='Material', how='left').drop(columns=['Material'])
-        ultima_columna = for_abc.columns[-1]
-        # Crear una lista con el nuevo orden de las columnas
-        nuevo_orden = [for_abc.columns[0], ultima_columna] + list(for_abc.columns[1:-1])
-        
         # Reordenar las columnas del DataFrame
-        for_abc = for_abc[nuevo_orden]
-
+        
+        plt.figure(figsize=(10, 6))
+        ay= sns.barplot(x='product_mix', y='sales', data=b)
+        for p in ay.patches:
+            ay.annotate(format(f"${p.get_height():,.2f}"), 
+                        (p.get_x() + p.get_width() / 2., p.get_height()), 
+                        ha = 'center', va = 'center', 
+                        xytext = (0, 9), 
+                        textcoords = 'offset points')
+        plt.xlabel('Categoría ABC')
+        plt.ylabel('Ventas Totales')
+        plt.title('Ventas Totales por Categoría ABC')
+        st.pyplot(plt)
         # Reordenar las columnas del DataFrame  
         st.markdown("ABC VENTAS")
-        st.table(b.head(5))
-        st.markdown("ABC UNIDADES")
-        st.table(for_abc.head(5))
+        st.table(b.head(3))
+        
+        st.markdown("Gráfico de Unidades por Categoría ABC")
+        plt.figure(figsize=(10, 6))
+
+        # Crear el gráfico de barras
+        ax = sns.barplot(x='product_mix', y='sales', data=for_abc)
+
+        # Añadir etiquetas encima de las barras
+        for p in ax.patches:
+            ax.annotate(format(p.get_height(), '.2f'), 
+                        (p.get_x() + p.get_width() / 2., p.get_height()), 
+                        ha = 'center', va = 'center', 
+                        xytext = (0, 9), 
+                        textcoords = 'offset points')
+
+        plt.xlabel('Categoría ABC')
+        plt.ylabel('Unidades Vendidas')
+        plt.title('Unidades Vendidas por Categoría ABC')
+        st.pyplot(plt)
+        st.table(for_abc.head(3))
         
         
 
@@ -463,9 +449,7 @@ def mostrar_dataframe():
         )
     else:
         st.write("Por favor, sube ambos archivos para continuar.")
-    def Ranking():
-        st.sidebar.header("Cargar archivo de ventas")
-        uploaded_file = st.sidebar.file_uploader("Sube tu archivo CSV de ventas", type=["csv"])
+    
 
 # Mostrar contenido basado en la opción seleccionada
 if option == 'Forecast':
@@ -474,5 +458,5 @@ elif option == 'Stock de Seguridad y Punto de Reorden':
     mostrar_grafico()
 elif option == 'ABC':
     mostrar_dataframe()
-elif option == 'Ranking':
-    Ranking()
+#elif option == 'Ranking':
+ #   Ranking()
