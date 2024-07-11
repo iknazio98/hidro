@@ -8,7 +8,7 @@ st.title("Logismart-App")
 # Opciones en el menú lateral
 option = st.sidebar.selectbox(
     'Selecciona una opción:',
-    ('Forecast', 'Stock de Seguridad y Punto de Reorden', 'ABC', 'Ranking')
+    ('Stock de Seguridad y Punto de Reorden', 'ABC')
 )
  
 # Función para la opción "Hola Mundo"
