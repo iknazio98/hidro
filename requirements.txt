@@ -8,3 +8,4 @@ inventorize
 statsmodels
 xlsxwriter
 openpyxl
+seaborn
