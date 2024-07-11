@@ -435,11 +435,9 @@ def mostrar_dataframe():
     
 
 # Mostrar contenido basado en la opción seleccionada
-if option == 'Forecast':
-    hola_mundo()
-elif option == 'Stock de Seguridad y Punto de Reorden':
+
+if option == 'Stock de Seguridad y Punto de Reorden':
     mostrar_grafico()
 elif option == 'ABC':
     mostrar_dataframe()
-#elif option == 'Ranking':
- #   Ranking()
+
