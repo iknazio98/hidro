@@ -10,148 +10,7 @@ option = st.sidebar.selectbox(
     'Selecciona una opción:',
     ('Stock de Seguridad y Punto de Reorden', 'ABC')
 )
- 
-# Función para la opción "Hola Mundo"
-def hola_mundo():
-    import streamlit as st
-    import pandas as pd
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from statsmodels.tsa.holtwinters import ExponentialSmoothing
-    from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-    st.header('Forecast')
-
-    st.sidebar.header("Cargar archivo de ventas")
-    uploaded_file = st.sidebar.file_uploader("Sube tu archivo CSV de ventas", type=["csv"])
-
-    # Lista de Familias
-    familias = [
-        "TERMINAL", "TUERCA", "LLAVE", "CONECTOR", "MAP", "CODO", "COPLA",
-        "GOLILLA", "BANDA", "BRIDA", "COLLAR", "UNION", "CABEZAL", "PERNO",
-        "TUBO", "EMPAQUETADURA", "CAMARA", "TUBERIA"
-    ]
-
-    # Menú desplegable para seleccionar la familia
-    familia_seleccionada = st.sidebar.selectbox("Selecciona la familia para el forecast", familias)
-
-    if uploaded_file is not None:
-        # Lectura de los archivos subidos
-        dataset = pd.read_csv(uploaded_file, index_col=0, encoding='latin-1')
-
-        # Procesamiento de datos (ajustado según tu necesidad)
-        df = dataset.drop(columns=[
-            'Organización de ventas', 'Pagador', 'Nombre', 'Rut', 'Gr.Clt-CLI',
-            'Gr.clientes-CLI', 'Gr.Ven.-CLI', 'Gr. Vendedores - CLI',
-            'Gr.Precio-CLI', 'Nº pedido cliente', 'Fe.PedCli', 'Factura',
-            'Referencia', 'Clase de factura', 'ZonaVen',
-            'Zona de ventas', 'GI', 'Grupo de imputación', 'CPag', 'FeValFijad',
-            'Referencia de pago', 'StatusC', 'An.', 'Pos.Fac',
-            '% margen s/venta', '% margen s/cost', 'Subtotal 6', 'Mon..5', 'Gr.Cl1',
-            'Gr.Clientes 1', 'Grupo art', 'Grupo de artículos', 'GrMat',
-            'Grupo materiales', 'GImMat', 'Gr.Imp.Material', 'OfVta',
-            'Oficina de ventas', 'Doc.venta', 'Tp.DC', 'Pos.Ventas', 'Gr.Ven.-PED',
-            'Gr.vendedores-PED', 'Gr.Cl-PED', 'Gr.clientes-PED', 'GP-PED',
-            'Gr.Precio-PED', 'Costes internos posición', 'Mon..6', 'Proc.empres.',
-            'CeBe'
-        ])
-        df['Fecha factura'] = pd.to_datetime(df['Fecha factura'])
-        df.rename(columns={'Fecha factura': 'fecha'}, inplace=True)
-        df['Año'] = df.fecha.dt.year
-        df = df[df['fecha'] >= '2022-01-1']
-        df.rename(columns={'Denominación': 'Denominacion', 'Ctd.facturada2': 'Unidad'}, inplace=True)
-        df = df[~df['Denominacion'].str.contains('POLIMERO|CLORURO|SULFATO|FLETE|UREA|REACTIVO')]
-        df['Cantidad'] = df['Cantidad'].str.replace(",", "").str.replace(".", "")
-        df['NETO'] = df['NETO'].str.replace(",", "").str.replace(".", "")
-        df['Margen'] = df['Margen'].str.replace(",", "").str.replace(".", "")
-        df = df[df['Cantidad'].notna()]
-        df['Material'] = df['Material'].astype(str)
-        df['Cantidad'] = df['Cantidad'].astype(int)
-        df['NETO'] = df['NETO'].astype(int)
-        df['Margen'] = df['Margen'].astype(int)
-        df = df[~df['Material'].str.startswith('S', na=False)]
-        df['Familia'] = df['Denominacion'].str.split().str[0]
-        df['date'] = df.fecha.dt.strftime('%Y-%m-%d')
-        df['date'] = pd.to_datetime(df['date'])
-        df['month'] = df.date.dt.month
-        df['year'] = df.date.dt.year
-        df['week'] = df.date.dt.isocalendar().week
-
-        # Filtrar por la familia seleccionada
-        df = df[df['Familia'] == familia_seleccionada]
-        CV = ['Cantidad', 'NETO']
-        Cant_Venta = st.sidebar.selectbox("Selecciona el tipo de Forecast", CV)
-        time_series=df.groupby(['week','month','year']).agg(date=('date','first'), demanda=(Cant_Venta, np.sum)).reset_index().sort_values('date')
-        q25, q50, q75 = np.percentile(time_series.demanda, (25,50,75))
-        iqr = q75 - q25
-        min_grade = q25 - 1.5*iqr
-        max_grade = q75 + 1.5*iqr
-        
-        max_value =time_series.demanda[(time_series.demanda>max_grade) & (time_series.demanda< time_series.demanda.max()) ].mean() 
-        time_series.demanda = np.where(time_series.demanda>max_value, max_value,time_series.demanda)
-        time_series['date']=pd.to_datetime(time_series['date'])
-        time_series= time_series.set_index('date')
-        monthly_series = time_series.demanda.resample('M').sum()
-
-        # Definir la serie de tiempo mensual (debes tener esta definida)
-        # monthly_series = ...
-
-        def ajustar_y_predecir(serie, trend=None, seasonal=None, seasonal_periods=12):
-            modelo = ExponentialSmoothing(serie, trend=trend, seasonal=seasonal, seasonal_periods=seasonal_periods)
-            ajuste = modelo.fit()
-            predicciones = ajuste.fittedvalues
-            mape = np.mean(np.abs((serie - predicciones) / serie)) * 100
-            return ajuste, predicciones, mape
-
-        # Probar diferentes configuraciones
-        configuraciones = [
-            {'trend': None, 'seasonal': None},
-            {'trend': 'add', 'seasonal': None},
-            {'trend': 'mul', 'seasonal': None},
-            {'trend': None, 'seasonal': 'add', 'seasonal_periods': 12},
-            {'trend': 'add', 'seasonal': 'add', 'seasonal_periods': 12},
-            {'trend': 'mul', 'seasonal': 'add', 'seasonal_periods': 12}
-        ]
-
-        # Función para calcular las métricas de error
-        def calcular_metricas(y_true, y_pred):
-            mae = mean_absolute_error(y_true, y_pred)
-            mse = mean_squared_error(y_true, y_pred)
-            rmse = np.sqrt(mse)
-            mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-            return mae, mse, rmse, mape
-
-        # Variables para almacenar el mejor modelo y su MAPE
-        mejor_mape = np.inf
-        mejor_modelo = None
-        mejores_predicciones = None
-
-        # Ajustar y graficar solo el mejor modelo
-        for config in configuraciones:
-            ajuste, predicciones, mape = ajustar_y_predecir(monthly_series, **config)
-            mae, mse, rmse, _ = calcular_metricas(monthly_series, predicciones)
-            
-            # Actualizar el mejor modelo basado en MAPE
-            if mape < mejor_mape:
-                mejor_mape = mape
-                mejor_modelo = ajuste
-                mejores_predicciones = predicciones
-
-        # Graficar el mejor modelo encontrado
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(monthly_series, label='Datos Originales')
-        ax.plot(mejores_predicciones, label='Predicciones')
-        ax.set_title(f"Mejor Modelo | MAPE: {mejor_mape:.2f}%")
-        ax.set_xlabel('Tiempo')
-        ax.set_ylabel('Valor')
-        ax.legend()
-        st.pyplot(fig)
-
-        # Forecast de los próximos 12 meses con el mejor modelo
-        forecast = mejor_modelo.forecast(12)
-        st.subheader("Forecast de los próximos 12 meses:")
-        st.write(round(forecast))
-# Función para la opción "Gráfico"
 def mostrar_grafico():
     import streamlit as st
     import pandas as pd
@@ -432,10 +291,8 @@ def mostrar_dataframe():
         )
     else:
         st.write("Por favor, sube ambos archivos para continuar.")
-    
 
 # Mostrar contenido basado en la opción seleccionada
-
 if option == 'Stock de Seguridad y Punto de Reorden':
     mostrar_grafico()
 elif option == 'ABC':
