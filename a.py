@@ -17,7 +17,7 @@ option = st.sidebar.selectbox(
 
 
 def SS():
-    import streamlit as st
+    
     import pandas as pd
     import numpy as np
     import datetime
@@ -168,14 +168,12 @@ def SS():
 
 # Función para la opción "DataFrame"
 def ABC():
-    import streamlit as st
-    import pandas as pd
+    
     import numpy as np
     import datetime
     import inventorize as inv
     import io
     from io import BytesIO
-    import matplotlib.pyplot as plt
     import seaborn as sns
 
     st.sidebar.header("Cargar archivo de ventas")
