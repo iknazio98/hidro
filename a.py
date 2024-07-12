@@ -11,7 +11,10 @@ option = st.sidebar.selectbox(
     ('Stock de Seguridad y Punto de Reorden', 'ABC')
 )
 #se eliminó el forecast 
-#trabajando en código de 
+#trabajando en código de nuevos apartados post reunion con la gerencia de logistica
+#- Apartado de inventario paralizado
+#- Apartado de inventario actual vs punto de reorden
+
 
 def SS():
     import streamlit as st
