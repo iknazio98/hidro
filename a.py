@@ -10,8 +10,10 @@ option = st.sidebar.selectbox(
     'Selecciona una opción:',
     ('Stock de Seguridad y Punto de Reorden', 'ABC')
 )
+#se eliminó el forecast 
+#trabajando en código de 
 
-def mostrar_grafico():
+def SS():
     import streamlit as st
     import pandas as pd
     import numpy as np
@@ -162,7 +164,7 @@ def mostrar_grafico():
         
 
 # Función para la opción "DataFrame"
-def mostrar_dataframe():
+def ABC():
     import streamlit as st
     import pandas as pd
     import numpy as np
@@ -294,7 +296,7 @@ def mostrar_dataframe():
 
 # Mostrar contenido basado en la opción seleccionada
 if option == 'Stock de Seguridad y Punto de Reorden':
-    mostrar_grafico()
+    SS()
 elif option == 'ABC':
-    mostrar_dataframe()
+    ABC()
 
