@@ -14,6 +14,7 @@ option = st.sidebar.selectbox(
 #trabajando en código de nuevos apartados post reunion con la gerencia de logistica
 #- Apartado de inventario paralizado
 #- Apartado de inventario actual vs punto de reorden
+#-Prox reunión 17-07 via teams con Maria Paz e Ivette 
 
 
 def SS():
