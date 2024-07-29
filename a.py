@@ -39,8 +39,8 @@ def SS():
         # Lectura de los archivos subidos
         df = pd.read_excel(uploaded_file)
         xd = pd.read_excel(uploaded_file_ldtime)
-        inv = pd.read_excel(uploaded_file_inv)
-        inventario = inv.dropna()
+        inv1 = pd.read_excel(uploaded_file_inv)
+        inventario = inv1.dropna()
         inventario['Cantidad'] = inventario['Libre utilización'] + inventario['En control calidad']
         inventario['Valor'] = inventario['Valor libre util.'] + inventario['Valor en insp.cal.']
         inventario['Material'] = inventario['Material'].astype(int)
