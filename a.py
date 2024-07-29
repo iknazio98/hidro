@@ -17,8 +17,8 @@ option = st.sidebar.selectbox(
 #-Prox reunión 17-07 via teams con Maria Paz e Ivette 
 
 
+
 def SS():
-    
     import pandas as pd
     import numpy as np
     import datetime
@@ -29,14 +29,25 @@ def SS():
     st.sidebar.header("Cargar archivo de ventas")
     uploaded_file = st.sidebar.file_uploader("Sube tu archivo Excel de ventas", type=["xlsx"])
 
-    # Carga del archivo de lead time
     st.sidebar.header("Cargar archivo de lead time")
     uploaded_file_ldtime = st.sidebar.file_uploader("Sube tu archivo Excel de lead time", type=["xlsx"])
     
-    if uploaded_file is not None and uploaded_file_ldtime is not None:
+    st.sidebar.header("Cargar archivo de inventario")
+    uploaded_file_inv = st.sidebar.file_uploader("Sube tu archivo Excel de inventario", type=["xlsx"])
+    
+    if uploaded_file is not None and uploaded_file_ldtime is not None and uploaded_file_inv is not None:
         # Lectura de los archivos subidos
         df = pd.read_excel(uploaded_file)
         xd = pd.read_excel(uploaded_file_ldtime)
+        inv = pd.read_excel(uploaded_file_inv)
+        inventario = inv.dropna()
+        inventario['Cantidad'] = inventario['Libre utilización'] + inventario['En control calidad']
+        inventario['Valor'] = inventario['Valor libre util.'] + inventario['Valor en insp.cal.']
+        inventario['Material'] = inventario['Material'].astype(int)
+        inventario['Material'] = inventario['Material'].astype(str)
+        inv_dic_c = inventario.set_index('Material')['Cantidad'].to_dict()
+        inv_dic_v = inventario.set_index('Material')['Valor'].to_dict()
+        
         # Convertir la columna 'Fe.Pedido' a tipo datetime, si no lo está
         xd['Fe.Pedido'] = pd.to_datetime(xd['Fe.Pedido'])
 
@@ -48,8 +59,8 @@ def SS():
 
         # Convertir el resultado a un diccionario
         lead_time = last_cycles.to_dict()
-        # Procesamiento de datos
         
+        # Procesamiento de datos
         df['Fecha factura'] = pd.to_datetime(df['Fecha factura'])
         df.rename(columns={'Fecha factura': 'fecha'}, inplace=True)
         df['Año'] = df.fecha.dt.year
@@ -61,15 +72,14 @@ def SS():
         df['Familia'] = df['Denominacion'].str.split().str[0]
         df['date'] = df.fecha.dt.strftime('%Y-%m-%d')
         df['date'] = pd.to_datetime(df['date'])
-        abc=df
+        abc = df
         
         # Aplicar filtro de fecha
-        
-        ventas_group = abc.groupby('Denominacion').agg(codigo_material=('Material', np.unique), cantidad_total= ('Cantidad',np.sum),unidad_medida=('Unidad', np.unique),ventas_totales= ('NETO',np.sum), margen_total =('Margen', np.sum),familia=('Familia', np.unique)).reset_index()
-        ventas_group.familia=ventas_group.familia.astype(str)
-        ventas_group.unidad_medida=ventas_group.unidad_medida.astype(str)
-        ventas_group.codigo_material=ventas_group.codigo_material.astype(str)
-        b=inv.productmix(ventas_group['Denominacion'], ventas_group['ventas_totales'],ventas_group['margen_total'])
+        ventas_group = abc.groupby('Denominacion').agg(codigo_material=('Material', np.unique), cantidad_total=('Cantidad', np.sum), unidad_medida=('Unidad', np.unique), ventas_totales=('NETO', np.sum), margen_total=('Margen', np.sum), familia=('Familia', np.unique)).reset_index()
+        ventas_group.familia = ventas_group.familia.astype(str)
+        ventas_group.unidad_medida = ventas_group.unidad_medida.astype(str)
+        ventas_group.codigo_material = ventas_group.codigo_material.astype(str)
+        b = inv.productmix(ventas_group['Denominacion'], ventas_group['ventas_totales'], ventas_group['margen_total'])
         b.head(20)
         df_group = df.groupby(['Denominacion', 'fecha']).agg(ventas_totales=('NETO', 'sum')).reset_index()
 
@@ -85,17 +95,14 @@ def SS():
         last_four['year'] = last_four.date.dt.year
         last_four['week'] = last_four.date.dt.isocalendar().week
 
-        aa = last_four.groupby(['week', 'month', 'year', 'Material']).agg(
-            nom_material=('Denominacion', np.unique), date=('date', 'first'), total_semanal=('Cantidad', np.sum), total_ventas=('NETO', np.sum)).reset_index()
+        aa = last_four.groupby(['week', 'month', 'year', 'Material']).agg(nom_material=('Denominacion', np.unique), date=('date', 'first'), total_semanal=('Cantidad', np.sum), total_ventas=('NETO', np.sum)).reset_index()
 
         groupedd = aa.groupby('Material').agg(promedio=('total_semanal', np.mean), sd=('total_semanal', 'std'), total_demanda=('total_semanal', np.sum), total_ventas=('total_ventas', np.sum)).reset_index()
         for_abc = inv.productmix(groupedd['Material'], groupedd['total_demanda'], groupedd['total_ventas'])
 
         mapping = {'A_A': 0.95, "A_C": 0.95, "C_A": 0.8, "A_B": 0.95, 'B_A': 0.7, "B_C": 0.75, "C_C": 0.7, "B_B": 0.7, "C_B": 0.8}
         for_abc['service_level'] = for_abc.product_mix.map(mapping)
-
         
-
         abcd = for_abc[['skus', 'service_level']]
         for_reorder = pd.merge(groupedd, abcd, how='left', left_on='Material', right_on='skus')
         for_reorder.Material = for_reorder.Material.astype(str)
@@ -117,6 +124,10 @@ def SS():
         # Añadir la denominación a all_data
         all_data = pd.merge(all_data, df[['Material', 'Denominacion']].drop_duplicates(), on='Material', how='left')
         
+        # Mapear inv_dic_c y inv_dic_v a all_data
+        all_data['Cantidad_Inv'] = all_data['Material'].map(inv_dic_c)
+        all_data['Valor_Inv'] = all_data['Material'].map(inv_dic_v)
+        
         # Añadir la denominación a for_abc
         for_abc = pd.merge(for_abc, df[['Material', 'Denominacion']].drop_duplicates(), left_on='skus', right_on='Material', how='left').drop(columns=['Material'])
         ultima_columna = for_abc.columns[-1]
@@ -137,8 +148,6 @@ def SS():
         all_data['saftey_stock'] = (all_data['saftey_stock']/7).round()  
         st.table(for_abc.head(5))
         
-        
-
         # Función para convertir DataFrame a Excel y devolver el archivo en bytes
         def to_excel(df):
             output = BytesIO()
@@ -153,7 +162,6 @@ def SS():
 
         df_all_data_xlsx = to_excel(all_data)
         
-        
         st.download_button(
             label='📥 Descargar Stock de seguridad y Puntos de reorden',
             data=df_all_data_xlsx,
@@ -163,8 +171,7 @@ def SS():
         
     else:
         st.write("Por favor, sube ambos archivos para continuar.")
-        
-        
+
         
 
 # Función para la opción "DataFrame"
