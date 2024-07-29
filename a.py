@@ -107,8 +107,7 @@ def SS():
         for_reorder = pd.merge(groupedd, abcd, how='left', left_on='Material', right_on='skus')
         for_reorder.Material = for_reorder.Material.astype(str)
         for_reorder['leadtime_prom'] = for_reorder.Material.map(lead_time)
-        
-        for_reorder['leadtime_prom'] = for_reorder['leadtime_prom'].fillna(30)
+    
         empty_data = pd.DataFrame()
         for i in range(for_reorder.shape[0]):
             ordering_point = inv.reorderpoint(for_reorder.loc[i, 'promedio'], for_reorder.loc[i, 'sd'], for_reorder.loc[i, 'leadtime_prom'], for_reorder.loc[i, 'service_level'])
